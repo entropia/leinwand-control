@@ -16,10 +16,10 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
 
-#define BMP_SCK 13
-#define BMP_MISO 12
-#define BMP_MOSI 11
-#define BMP_CS 10
+//#define BMP_SCK 13
+//#define BMP_MISO 12
+//#define BMP_MOSI 11
+//#define BMP_CS 10
 
 Adafruit_BMP280 bmp; // I2C
 //Adafruit_BMP280 bmp(BMP_CS); // hardware SPI
@@ -31,7 +31,7 @@ void setup() {
 
   if (!bmp.begin()) {
     Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
-    while (1);
+    while(1);
   }
 }
 
