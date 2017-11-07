@@ -15,6 +15,9 @@
 #include <SPI.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
+#include "ESP8266WiFi.h"
+
+#include <Wifi_credentials.cpp>
 
 //#define BMP_SCK 13
 //#define BMP_MISO 12
