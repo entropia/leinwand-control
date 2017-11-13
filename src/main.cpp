@@ -1,58 +1,72 @@
 /***************************************************************************
-  This is a library for the BMP280 humidity, temperature & pressure sensor
-  Designed specifically to work with the Adafruit BMEP280 Breakout
-  ----> http://www.adafruit.com/products/2651
-  These sensors use I2C or SPI to communicate, 2 or 4 pins are required
-  to interface.
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit andopen-source hardware by purchasing products
-  from Adafruit!
-  Written by Limor Fried & Kevin Townsend for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
+  Author: /madonius (@madonius)
+  Organisation: Entropia e.V. ~ CCC Karlsruhe
  ***************************************************************************/
 
 #include <Wire.h>
 #include <SPI.h>
+#include <ESP8266WiFi.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include "ESP8266WiFi.h"
 
-#include <Wifi_credentials.cpp>
-
-//#define BMP_SCK 13
-//#define BMP_MISO 12
-//#define BMP_MOSI 11
-//#define BMP_CS 10
+#include "Wifi_credentials.hpp"
 
 Adafruit_BME280 bme;
 
+//Functions prototypes
+void setupWiFi();
+bool readBME(float *bmeData);
+
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println(F("BMP280 test"));
 
-  if (!bme.begin()) {
-    Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
-    while(1);
-  }
+  setupWiFi();
 }
 
+
 void loop() {
-    Serial.print(F("Temperature = "));
-    Serial.print(bme.readTemperature());
-    Serial.println(" *C");
-
-    Serial.print(F("Pressure = "));
-    Serial.print(bme.readPressure());
-    Serial.println(" Pa");
-
-    Serial.print(F("Humidity = "));
-    Serial.print(bme.readHumidity());
-    Serial.println(" °");
-
-    Serial.print(F("Approx altitude = "));
-    Serial.print(bme.readAltitude(1013)); // this should be adjusted to your local forcase
-    Serial.println(" m");
-
-    Serial.println();
+    float* bmeData;
+    bool bmesuccess = readBME(bmeData);
     delay(2000);
+}
+
+
+
+//Function definitions
+//Connects to the WiFi
+void setupWiFi() {
+  WiFi.mode(WIFI_STA);
+
+  while ( WiFi.status() != WL_CONNECTED) {
+    Serial.print("Attempting to connect network, SSID: ");
+    Serial.println(SSID);
+    WiFi.begin(SSID, WIFIPW);
+
+    unsigned long start = millis();
+    while(millis() - start < 20000 && WiFi.status() != WL_CONNECTED){
+        delay(100);
+    }
+  }
+
+  Serial.printf("\nWifi Conected! \\o/ \n IP Address:");
+  Serial.println(WiFi.localIP());
+}
+
+//Reads the data from the sensor
+bool readBME(float *bmeData) {
+  if(bme.begin()) {
+    float T = bme.readTemperature();
+    float P = bme.readPressure();
+    float H = bme.readHumidity();
+    Serial.printf("Read:\nT=%s°C, P=%sPa, H=%s%%\n", T, P, H );
+    bmeData[0] = T;
+    bmeData[1] = P;
+    bmeData[2] = H;
+    return 1;
+  }
+  else {
+    Serial.println("Can not connect to the sensor :(");
+    return 0;
+  }
 }
