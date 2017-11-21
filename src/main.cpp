@@ -8,14 +8,21 @@
 #include <ESP8266WiFi.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
+#include <Adafruit_MQTT.h>
+#include <Adafruit_MQTT_Client.h>
 
 #include "Wifi_credentials.hpp"
+#include "mqtt_credentials.hpp"
 
 Adafruit_BME280 bme;
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
 
 //Functions prototypes
 void setupWiFi();
 bool readBME(float *bmeData);
+void MQTT_connect();
+void mqtt_publish(float *bmeData);
 
 void setup() {
   Serial.begin(115200);
@@ -23,19 +30,18 @@ void setup() {
 
   setupWiFi();
   bme.begin(0x76);
-  delay(1337);
+  delay(420);
 }
 
 
 void loop() {
     float bmeData[3];
     bool bmesuccess = readBME(bmeData);
-    Serial.println(bmeData[0]);
-    delay(2000);
+    MQTT_connect();
+    delay(15000);
+    mqtt_publish(bmeData);
 }
 
-//Function definitions
-//Connects to the WiFi
 void setupWiFi() {
   WiFi.mode(WIFI_STA);
 
@@ -54,7 +60,6 @@ void setupWiFi() {
   Serial.println(WiFi.localIP());
 }
 
-//Reads the data from the sensor
 bool readBME(float* bmeData) {
   float T = bme.readTemperature();
   delay(50);
@@ -66,4 +71,38 @@ bool readBME(float* bmeData) {
   bmeData[1] = P;
   bmeData[2] = H;
   return 1;
+}
+
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print(F("Connecting to MQTT... "));
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.println(mqtt.connectErrorString(ret));
+       Serial.println(F("Retrying MQTT connection in 5 seconds..."));
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds
+       retries--;
+       if (retries == 0) {
+         // basically die and wait for WDT to reset me
+         while (1);
+       }
+  }
+  Serial.println(F("MQTT Connected!"));
+}
+
+void mqtt_publish(float *bmeData) {
+  Adafruit_MQTT_Publish temperature = Adafruit_MQTT_Publish(&mqtt, MQTT_TOPIC "/T");
+  temperature.publish(bmeData[0]);
+  Adafruit_MQTT_Publish pressure = Adafruit_MQTT_Publish(&mqtt, MQTT_TOPIC "/P");
+  pressure.publish(bmeData[1]);
+  Adafruit_MQTT_Publish humidity = Adafruit_MQTT_Publish(&mqtt, MQTT_TOPIC "/H");
+  humidity.publish(bmeData[2]);
 }
