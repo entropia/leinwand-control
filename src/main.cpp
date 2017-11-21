@@ -22,16 +22,17 @@ void setup() {
   Serial.println(F("BMP280 test"));
 
   setupWiFi();
+  bme.begin(0x76);
+  delay(1337);
 }
 
 
 void loop() {
-    float* bmeData;
+    float bmeData[3];
     bool bmesuccess = readBME(bmeData);
+    Serial.println(bmeData[0]);
     delay(2000);
 }
-
-
 
 //Function definitions
 //Connects to the WiFi
@@ -54,19 +55,15 @@ void setupWiFi() {
 }
 
 //Reads the data from the sensor
-bool readBME(float *bmeData) {
-  if(bme.begin()) {
-    float T = bme.readTemperature();
-    float P = bme.readPressure();
-    float H = bme.readHumidity();
-    Serial.printf("Read:\nT=%s°C, P=%sPa, H=%s%%\n", T, P, H );
-    bmeData[0] = T;
-    bmeData[1] = P;
-    bmeData[2] = H;
-    return 1;
-  }
-  else {
-    Serial.println("Can not connect to the sensor :(");
-    return 0;
-  }
+bool readBME(float* bmeData) {
+  float T = bme.readTemperature();
+  delay(50);
+  float P = bme.readPressure();
+  delay(50);
+  float H = bme.readHumidity();
+  delay(50);
+  bmeData[0] = T;
+  bmeData[1] = P;
+  bmeData[2] = H;
+  return 1;
 }
