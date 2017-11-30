@@ -1,5 +1,6 @@
 /***************************************************************************
-  Author: /madonius (@madonius)
+  Authors: /madonius (@madonius)
+           GityUpNow
   Organisation: Entropia e.V. ~ CCC Karlsruhe
  ***************************************************************************/
 
@@ -28,7 +29,6 @@ void mqtt_publish(float *bmeData);
 void setup() {
   Serial.begin(115200);
   setupWiFi();
-
 
   if(!bme.begin(0x76))
     Serial.println(F("Could not find a BME280 Sensor!"));
