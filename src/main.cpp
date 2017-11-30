@@ -42,7 +42,7 @@ void loop() {
     readBME(bmeData);
 
     mqtt_connect();
-    mqtt_publish(bmedata);
+    mqtt_publish(bmeData);
 
     //Record data every 15 seconds
     delay(15000);
@@ -54,7 +54,7 @@ void setupWiFi() {
   WiFi.mode(WIFI_STA);
 
   while ( WiFi.status() != WL_CONNECTED) {
-    Serial.print(F("Attempting to connect network, SSID: "));
+    Serial.println("Attempting to connect network, SSID: ");
     Serial.println(SSID);
     WiFi.begin(SSID, WIFIPW);
 
@@ -64,7 +64,7 @@ void setupWiFi() {
     }
   }
 
-  Serial.printf(F("\nWifi Conected! \\o/ \n IP Address:"));
+  Serial.println("\nWifi Conected! \\o/ \n IP Address:");
   Serial.println(WiFi.localIP());
 }
 
