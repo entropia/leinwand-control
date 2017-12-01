@@ -3,6 +3,11 @@
 ## Geting started
 We would recommend using [platformio](https://platformio.org)
 
+After installation, compiling the binary is as simple as `platformio run` in the
+top directory.
+
+Connect the ESP, reset it into flash mode and flash with  `platformio run -t upload`
+
 ### Credentials
 
 Two files are needed:
