@@ -11,9 +11,16 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_MQTT.h>
 #include <Adafruit_MQTT_Client.h>
+#include <RCSwitch.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+
 
 #include "WiFi_credentials.hpp"
 #include "MQTT_credentials.hpp"
+#include "OTA_credentials.hpp"
 
 //Global Constants
 #define MEASURE 15000
@@ -24,14 +31,18 @@
 #define   UP_PIN 14
 #define MISC_PIN 16
 
-//Object declarations
-Adafruit_BME280 bme;
-WiFiClient client;
-Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
-Adafruit_MQTT_Subscribe control(&mqtt, MQTT_CONTROL_TOPIC);
-
 //Global Variables
 unsigned long last = 0;
+String control_topic = String(MQTT_TOPIC) + "/" + String(MQTT_CONTROL_TOPIC);
+String response_topic = String(MQTT_TOPIC) + "/" + String(MQTT_RESPONSE_TOPIC);
+
+//Object declarations
+Adafruit_BME280 bme;
+RCSwitch transceiver = RCSwitch();
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
+Adafruit_MQTT_Subscribe control(&mqtt,  control_topic.c_str());
+Adafruit_MQTT_Publish  response(&mqtt, response_topic.c_str());
 
 //Functions prototypes
 void pulse(byte pin);
@@ -53,17 +64,46 @@ void setup() {
   //Subscribe to the Leinwand-Controlfeed
   control.setCallback(mqtt_callback);
   mqtt.subscribe(&control);
-  
+
   //Pin Setups
   pinMode(DOWN_PIN, OUTPUT);
   pinMode(STOP_PIN, OUTPUT);
   pinMode(UP_PIN, OUTPUT);
-  pinMode(MISC_PIN, OUTPUT);
+
+  //transceiver setup
+  transceiver.enableTransmit(MISC_PIN);
+  //Rev standard setting
+  transceiver.setPulseLength(350);
+
+  //OTA-Part
+  //ArduinoOTA.setHostname(OTA_USERNAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+
+  //OTA-Updatepart
+  ArduinoOTA.onStart([]() {
+     Serial.println("Start");
+   });
+   ArduinoOTA.onEnd([]() {
+     Serial.println("\nEnd");
+   });
+   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+   });
+   ArduinoOTA.onError([](ota_error_t error) {
+     Serial.printf("Error[%u]: ", error);
+     if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed" + String(OTA_PASSWORD));
+     else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+     else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+     else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+     else if (error == OTA_END_ERROR) Serial.println("End Failed");
+   });
+   ArduinoOTA.begin();
+
 }
 
 
 void loop() {
-    mqtt_connect();    
+    mqtt_connect();
 
     float bmeData[3];
     readBME(bmeData);
@@ -72,6 +112,8 @@ void loop() {
     last = millis();
 
     mqtt.processPackets(MEASURE);
+
+    ArduinoOTA.handle();
 }
 
 
@@ -146,29 +188,51 @@ void mqtt_publish(float *bmeData) {
 
 
 void mqtt_callback(char *str, uint16_t len) {
-  if(len == 1) {
-    char control = *str;
-    
-    Serial.println(control);
+  String command = String(str);
 
-    switch(control) {
-	case('u'):{
-          pulse(UP_PIN);    
-        }break;
-        case('s'):{
-          pulse(STOP_PIN);    
-        }break;
-        case('d'):{
-          pulse(DOWN_PIN);    
-	}break;
-	case('m'):{
-          pulse(MISC_PIN);    
-	}break;
+  //Simple "leinwand" functions
+  if (command.length() == 1) {
+    switch (command.charAt(0)) {
+      case 'u':
+        pulse(UP_PIN);
+      break;
+      case 's':
+        pulse(STOP_PIN);
+      break;
+      case 'd':
+        pulse(DOWN_PIN);
+      break;
+    }
+  //Just ugly....
+  } else {
+    if (command.length() == 5 || command.length() == 6) {
+      char temp = command.charAt(0);
+
+      Serial.println(command.charAt(1) - '0');
+
+      //Rev Ritter format...
+      if (temp == 'A' || temp == 'B' || temp == 'C' || temp == 'D') {
+
+        if (command.substring(3).equals("ON")) {
+          Serial.println("ON");
+          transceiver.switchOn(temp,  command.charAt(1) - '0');
+        } else if (command.substring(3).equals("OFF")) {
+          transceiver.switchOff(temp, command.charAt(1) - '0');
+        }
+
+      }
     }
   }
+
+  response.publish("OK");
+  Serial.println("OK-Response published!");
+
 }
 
 void pulse(byte pin){
+  Serial.println(pin);
+
+
   digitalWrite(pin, HIGH);
   delay(PULSE);
   digitalWrite(pin, LOW);
