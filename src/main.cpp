@@ -17,7 +17,6 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 
-
 #include "WiFi_credentials.hpp"
 #include "MQTT_credentials.hpp"
 #include "OTA_credentials.hpp"
@@ -33,16 +32,14 @@
 
 //Global Variables
 unsigned long last = 0;
-String control_topic = String(MQTT_TOPIC) + "/" + String(MQTT_CONTROL_TOPIC);
-String response_topic = String(MQTT_TOPIC) + "/" + String(MQTT_RESPONSE_TOPIC);
 
 //Object declarations
 Adafruit_BME280 bme;
 RCSwitch transceiver = RCSwitch();
 WiFiClient client;
 Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
-Adafruit_MQTT_Subscribe control(&mqtt,  control_topic.c_str());
-Adafruit_MQTT_Publish  response(&mqtt, response_topic.c_str());
+Adafruit_MQTT_Subscribe control(&mqtt,  MQTT_CONTROL_TOPIC);
+Adafruit_MQTT_Publish  response(&mqtt, MQTT_RESPONSE_TOPIC);
 
 //Functions prototypes
 void pulse(byte pin);
@@ -75,30 +72,32 @@ void setup() {
   //Rev standard setting
   transceiver.setPulseLength(350);
 
-  //OTA-Part
-  //ArduinoOTA.setHostname(OTA_USERNAME);
-  ArduinoOTA.setPassword(OTA_PASSWORD);
 
-  //OTA-Updatepart
-  ArduinoOTA.onStart([]() {
-     Serial.println("Start");
-   });
-   ArduinoOTA.onEnd([]() {
-     Serial.println("\nEnd");
-   });
-   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-   });
-   ArduinoOTA.onError([](ota_error_t error) {
-     Serial.printf("Error[%u]: ", error);
-     if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed" + String(OTA_PASSWORD));
-     else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-     else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-     else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-     else if (error == OTA_END_ERROR) Serial.println("End Failed");
-   });
-   ArduinoOTA.begin();
+  #ifdef OTA_CREDENTIALS_HPP
+    //OTA-Part
+    ArduinoOTA.setHostname(OTA_USERNAME);
+    ArduinoOTA.setPassword(OTA_PASSWORD);
 
+    //OTA-Updatepart
+    ArduinoOTA.onStart([]() {
+       Serial.println("Start");
+     });
+     ArduinoOTA.onEnd([]() {
+       Serial.println("\nEnd");
+     });
+     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+     });
+     ArduinoOTA.onError([](ota_error_t error) {
+       Serial.printf("Error[%u]: ", error);
+       if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed" + String(OTA_PASSWORD));
+       else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+       else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+       else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+       else if (error == OTA_END_ERROR) Serial.println("End Failed");
+     });
+     ArduinoOTA.begin();
+  #endif
 }
 
 
@@ -113,7 +112,9 @@ void loop() {
 
     mqtt.processPackets(MEASURE);
 
-    ArduinoOTA.handle();
+    #ifdef OTA_CREDENTIALS_HPP
+      ArduinoOTA.handle();
+    #endif
 }
 
 
