@@ -15,11 +15,14 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
 
 #include "WiFi_credentials.hpp"
 #include "MQTT_credentials.hpp"
 #include "OTA_credentials.hpp"
+
+#ifdef OTA_CREDENTIALS_HPP
+  #include <ArduinoOTA.h>
+#endif
 
 //Global Constants
 #define MEASURE 15000
@@ -44,6 +47,7 @@ Adafruit_MQTT_Publish  response(&mqtt, MQTT_RESPONSE_TOPIC);
 //Functions prototypes
 void pulse(byte pin);
 void setupWiFi();
+void OTA_init();
 void readBME(float *bmeData);
 void mqtt_connect();
 void mqtt_publish(float *bmeData);
@@ -69,35 +73,9 @@ void setup() {
 
   //transceiver setup
   transceiver.enableTransmit(MISC_PIN);
-  //Rev standard setting
-  transceiver.setPulseLength(350);
 
-
-  #ifdef OTA_CREDENTIALS_HPP
-    //OTA-Part
-    ArduinoOTA.setHostname(OTA_USERNAME);
-    ArduinoOTA.setPassword(OTA_PASSWORD);
-
-    //OTA-Updatepart
-    ArduinoOTA.onStart([]() {
-       Serial.println("Start");
-     });
-     ArduinoOTA.onEnd([]() {
-       Serial.println("\nEnd");
-     });
-     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-     });
-     ArduinoOTA.onError([](ota_error_t error) {
-       Serial.printf("Error[%u]: ", error);
-       if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed" + String(OTA_PASSWORD));
-       else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-       else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-       else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-       else if (error == OTA_END_ERROR) Serial.println("End Failed");
-     });
-     ArduinoOTA.begin();
-  #endif
+  //OTA (if enabled)
+  OTA_init();
 }
 
 
@@ -206,6 +184,7 @@ void mqtt_callback(char *str, uint16_t len) {
     }
   //Just ugly....
   } else {
+    //REV Ritter
     if (command.length() == 5 || command.length() == 6) {
       char temp = command.charAt(0);
 
@@ -222,12 +201,18 @@ void mqtt_callback(char *str, uint16_t len) {
         }
 
       }
+    //Brennenstuhl
+    } else if(command.length() == 13 || command.length() == 14) {
+      if (command.endsWith("ON")) {
+        transceiver.switchOn(command.substring(0, 5).c_str(), command.substring(5, 10).c_str());
+      } else if(command.endsWith("OFF")) {
+        transceiver.switchOff(command.substring(0, 5).c_str(), command.substring(5, 10).c_str());
+      }
     }
   }
 
   response.publish("OK");
   Serial.println("OK-Response published!");
-
 }
 
 void pulse(byte pin){
@@ -237,4 +222,32 @@ void pulse(byte pin){
   digitalWrite(pin, HIGH);
   delay(PULSE);
   digitalWrite(pin, LOW);
+}
+
+void OTA_init(){
+  #ifdef OTA_CREDENTIALS_HPP
+    //OTA-Part
+    ArduinoOTA.setHostname(OTA_USERNAME);
+    ArduinoOTA.setPassword(OTA_PASSWORD);
+
+    //OTA-Updatepart
+    ArduinoOTA.onStart([]() {
+       Serial.println("Start");
+     });
+     ArduinoOTA.onEnd([]() {
+       Serial.println("\nEnd");
+     });
+     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+     });
+     ArduinoOTA.onError([](ota_error_t error) {
+       Serial.printf("Error[%u]: ", error);
+       if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed" + String(OTA_PASSWORD));
+       else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+       else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+       else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+       else if (error == OTA_END_ERROR) Serial.println("End Failed");
+     });
+     ArduinoOTA.begin();
+  #endif
 }
