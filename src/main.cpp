@@ -35,6 +35,8 @@
 
 //Global Variables
 unsigned long last = 0;
+float bmeData[3];
+
 
 //Object declarations
 Adafruit_BME280 bme;
@@ -81,12 +83,14 @@ void setup() {
 
 void loop() {
     mqtt_connect();
-
-    float bmeData[3];
-    readBME(bmeData);
-
-    mqtt_publish(bmeData);
-    last = millis();
+    
+    //Measure every X seconds
+    if((millis() - last) > MEASURE) { 
+        readBME(bmeData);
+        mqtt_publish(bmeData);
+        
+        last = millis();
+    }
 
     mqtt.processPackets(MEASURE);
 
