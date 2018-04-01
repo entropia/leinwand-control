@@ -36,15 +36,17 @@
 //Global Variables
 unsigned long last = 0;
 float bmeData[3];
-
+boolean bmeFound = true;
 
 //Object declarations
 Adafruit_BME280 bme;
-RCSwitch transceiver = RCSwitch();
+RCSwitch transceiver =        RCSwitch();
 WiFiClient client;
-Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
-Adafruit_MQTT_Subscribe control(&mqtt,  MQTT_CONTROL_TOPIC);
-Adafruit_MQTT_Publish  response(&mqtt, MQTT_RESPONSE_TOPIC);
+Adafruit_MQTT_Client          mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
+Adafruit_MQTT_Subscribe   control(&mqtt,  MQTT_CONTROL_TOPIC);
+Adafruit_MQTT_Publish       response(&mqtt, MQTT_RESPONSE_TOPIC);
+Adafruit_MQTT_Subscribe   common(&mqtt, MQTT_COMMON_CONTROL_TOPIC);
+Adafruit_MQTT_Publish       commonResponse(&mqtt, MQTT_COMMON_RESPONSE_TOPIC);
 
 //Functions prototypes
 void pulse(byte pin);
@@ -53,20 +55,25 @@ void OTA_init();
 void readBME(float *bmeData);
 void mqtt_connect();
 void mqtt_publish(float *bmeData);
-void mqtt_callback(char *str, uint16_t len);
+void controlCallback(char *str, uint16_t len);
+void commonCallback(char *str, uint16_t len);
 
 void setup() {
   Serial.begin(115200);
   setupWiFi();
 
-  if(!bme.begin(0x76))
+  if(!bme.begin(0x76)) {
     Serial.println(F("Could not find a BME280 Sensor!"));
+    bmeFound = false;
+  }
 
   delay(400);
 
   //Subscribe to the Leinwand-Controlfeed
-  control.setCallback(mqtt_callback);
+  control.setCallback(controlCallback);
+  common.setCallback(commonCallback);
   mqtt.subscribe(&control);
+  mqtt.subscribe(&common);
 
   //Pin Setups
   pinMode(DOWN_PIN, OUTPUT);
@@ -83,16 +90,14 @@ void setup() {
 
 void loop() {
     mqtt_connect();
-    
-    //Measure every X seconds
-    if((millis() - last) > MEASURE) { 
-        readBME(bmeData);
-        mqtt_publish(bmeData);
-        
-        last = millis();
+
+    if((millis() - last) >= MEASURE && bmeFound) {
+      readBME(bmeData);
+      mqtt_publish(bmeData);
+      last = millis();
     }
 
-    mqtt.processPackets(MEASURE);
+    mqtt.processPackets(10);
 
     #ifdef OTA_CREDENTIALS_HPP
       ArduinoOTA.handle();
@@ -158,19 +163,26 @@ void mqtt_connect() {
   Serial.println(F("MQTT Connected!"));
 }
 
+//Publish the BME-Data
 void mqtt_publish(float *bmeData) {
   Adafruit_MQTT_Publish temperature = Adafruit_MQTT_Publish(&mqtt, MQTT_TOPIC "/T");
+  Serial.println(bmeData[0]);
   temperature.publish(bmeData[0]);
 
   Adafruit_MQTT_Publish pressure = Adafruit_MQTT_Publish(&mqtt, MQTT_TOPIC "/P");
+  Serial.println(bmeData[1]);
   pressure.publish(bmeData[1]);
 
   Adafruit_MQTT_Publish humidity = Adafruit_MQTT_Publish(&mqtt, MQTT_TOPIC "/H");
+  Serial.println(bmeData[2]);
   humidity.publish(bmeData[2]);
+
+  Serial.println("Published!");
+  Serial.println();
 }
 
-
-void mqtt_callback(char *str, uint16_t len) {
+//Handle the leinwand
+void controlCallback(char *str, uint16_t len) {
   String command = String(str);
 
   //Simple "leinwand" functions
@@ -186,8 +198,16 @@ void mqtt_callback(char *str, uint16_t len) {
         pulse(DOWN_PIN);
       break;
     }
-  //Just ugly....
-  } else {
+  }
+
+  response.publish(command.c_str());
+  Serial.println("OK-Response published!");
+}
+
+//Handle the 433MHz-Sockets
+void commonCallback(char* str, uint16_t len) {
+    String command = String(str);
+
     //REV Ritter
     if (command.length() == 5 || command.length() == 6) {
       char temp = command.charAt(0);
@@ -213,21 +233,19 @@ void mqtt_callback(char *str, uint16_t len) {
         transceiver.switchOff(command.substring(0, 5).c_str(), command.substring(5, 10).c_str());
       }
     }
-  }
 
-  response.publish("OK");
-  Serial.println("OK-Response published!");
+    commonResponse.publish(command.c_str());
+    Serial.println("OK-Response published!");
 }
 
+//Send a short pulse
 void pulse(byte pin){
-  Serial.println(pin);
-
-
   digitalWrite(pin, HIGH);
   delay(PULSE);
   digitalWrite(pin, LOW);
 }
 
+//Init the OTA-Update
 void OTA_init(){
   #ifdef OTA_CREDENTIALS_HPP
     //OTA-Part

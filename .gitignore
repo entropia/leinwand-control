@@ -5,3 +5,4 @@
 *hpp
 lib/
 platformio.ini
+.travis.yml
